@@ -1,5 +1,4 @@
-﻿// CardG.cpp : Defines the entry point for the application.
-//
+﻿// CardG.cpp: Defines the entry point for the application.
 
 #include "CardG.h"
 
@@ -20,6 +19,11 @@ void renderButton(SDL_Renderer* renderer, const Button& button) {
 }
 
 int main(int argc, char* argv[]) {
+    if (SDLNet_Init() < 0) {
+        std::cerr << "failed to initialize" << std::endl;
+        SDL_Quit();
+        return -1;
+    }
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window* window = SDL_CreateWindow("SDL Button", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
@@ -90,7 +94,7 @@ int main(int argc, char* argv[]) {
         renderButton(renderer, button1);
         renderButton(renderer, button2);
 
-        // Update the window
+        // Update the 
         SDL_RenderPresent(renderer);
     }
 

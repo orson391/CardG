@@ -15,7 +15,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
 # Find SDL2 using custom FindSDL2.cmake
 find_package(SDL2 REQUIRED)
+find_package(SDL2_net REQUIRED)
+find_package(SDL2_ttf REQUIRED)
 
-# Link SDL2 to the target
-target_include_directories(CardG PRIVATE ${SDL2_INCLUDE_DIRS})
-target_link_libraries(CardG PRIVATE ${SDL2_LIBRARIES})
+target_link_libraries(CardG PRIVATE 
+    SDL2::SDL2 SDL2::SDL2main 
+    SDL2_net::SDL2_net 
+    SDL2_ttf::SDL2_ttf
+)
