@@ -19,8 +19,3 @@ find_package(SDL2 REQUIRED)
 # Link SDL2 to the target
 target_include_directories(CardG PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(CardG PRIVATE ${SDL2_LIBRARIES})
-
-add_custom_command(TARGET CardG POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "C:/vcpkg/installed/x64-windows/debug/bin/SDL2d.dll"  # Replace with actual path if needed
-        $<TARGET_FILE_DIR:CardG>)
