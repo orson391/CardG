@@ -4,5 +4,6 @@
 #pragma once
 
 #include <iostream>
+#include <SDL2/SDL.h>
 
 // TODO: Reference additional headers your program requires here.

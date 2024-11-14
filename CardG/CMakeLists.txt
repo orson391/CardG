@@ -10,3 +10,19 @@ if (CMAKE_VERSION VERSION_GREATER 3.12)
 endif()
 
 # TODO: Add tests and install targets if needed.
+# Add custom FindSDL2 module path
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
+
+# Find SDL2 using custom FindSDL2.cmake
+find_package(SDL2 REQUIRED)
+
+# Link SDL2 to the target
+target_include_directories(CardG PRIVATE ${SDL2_INCLUDE_DIRS})
+target_link_libraries(CardG PRIVATE ${SDL2_LIBRARIES})
+
+add_custom_command(TARGET CardG POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${_VCPKG_INSTALLED_DIR}/x64-windows/bin/SDL2.dll"  # Replace with actual path if needed
+        $<TARGET_FILE_DIR:CardG>)
+
+
