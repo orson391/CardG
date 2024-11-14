@@ -22,7 +22,5 @@ target_link_libraries(CardG PRIVATE ${SDL2_LIBRARIES})
 
 add_custom_command(TARGET CardG POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${_VCPKG_INSTALLED_DIR}/x64-windows/bin/SDL2.dll"  # Replace with actual path if needed
+        "C:/vcpkg/installed/x64-windows/debug/bin/SDL2d.dll"  # Replace with actual path if needed
         $<TARGET_FILE_DIR:CardG>)
-
-
