@@ -3,50 +3,100 @@
 
 #include "CardG.h"
 
-int main(int argc, char* argv[]) 
-{
-    // Initialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
-        std::cerr << "SDL could not initialize! SDL_Error: " << SDL_GetError() << std::endl;
-        return 1;
-    }
+struct Button {
+    SDL_Rect rect;
+    SDL_Color color;
+    std::string label;
+};
 
-    // Create a window
-    SDL_Window* window = SDL_CreateWindow("SDL Example",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        640, 480,
-        SDL_WINDOW_SHOWN);
-    if (window == nullptr) {
-        std::cerr << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
-        SDL_Quit();
-        return 1;
-    }
+bool isMouseOver(const SDL_Rect& rect, int mouseX, int mouseY) {
+    return mouseX > rect.x && mouseX < rect.x + rect.w &&
+        mouseY > rect.y && mouseY < rect.y + rect.h;
+}
 
-    // Create a renderer to draw on the window
+void renderButton(SDL_Renderer* renderer, const Button& button) {
+    SDL_SetRenderDrawColor(renderer, button.color.r, button.color.g, button.color.b, button.color.a);
+    SDL_RenderFillRect(renderer, &button.rect);
+}
+
+int main(int argc, char* argv[]) {
+    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Window* window = SDL_CreateWindow("SDL Button", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    if (renderer == nullptr) {
-        std::cerr << "Renderer could not be created! SDL_Error: " << SDL_GetError() << std::endl;
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
+
+    if (!window || !renderer) {
+        std::cerr << "SDL Initialization failed: " << SDL_GetError() << std::endl;
+        return -1;
     }
 
-    // Set the renderer draw color (e.g., blue)
-    SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);  // RGB color: blue
+    // First button (black)
+    Button button1 = { {200, 200, 100, 30}, {0, 0, 0, 255}, "Click Me" };
 
-    // Clear the window with the draw color
-    SDL_RenderClear(renderer);
+    // Second button (red)
+    Button button2 = { {200, 300, 100, 30}, {255, 0, 0, 255}, "Press Me" };
 
-    // Present the renderer to the window (updates the display)
-    SDL_RenderPresent(renderer);
+    bool running = true;
+    SDL_Event e;
 
-    // Wait for a few seconds
-    SDL_Delay(3000); // 3 seconds
+    while (running) {
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                running = false;
+            }
 
-    // Clean up and close the SDL resources
+            if (e.type == SDL_MOUSEMOTION) {
+                int mouseX, mouseY;
+                SDL_GetMouseState(&mouseX, &mouseY);
+
+                // Check for hover on button 1
+                if (isMouseOver(button1.rect, mouseX, mouseY)) {
+                    button1.color = { 0, 255, 0, 255 };  // Hover color (green)
+                }
+                else {
+                    button1.color = { 0, 0, 0, 255 };  // Default color (black)
+                }
+
+                // Check for hover on button 2
+                if (isMouseOver(button2.rect, mouseX, mouseY)) {
+                    button2.color = { 0, 255, 0, 255 };  // Hover color (green)
+                }
+                else {
+                    button2.color = { 255, 0, 0, 255 };  // Default color (red)
+                }
+            }
+
+            if (e.type == SDL_MOUSEBUTTONDOWN) {
+                int mouseX, mouseY;
+                SDL_GetMouseState(&mouseX, &mouseY);
+
+                // Check for button 1 click
+                if (isMouseOver(button1.rect, mouseX, mouseY)) {
+                    std::cout << "Button 1 clicked!" << std::endl;
+
+                }
+
+                // Check for button 2 click
+                if (isMouseOver(button2.rect, mouseX, mouseY)) {
+                    std::cout << "Button 2 clicked!" << std::endl;
+                }
+            }
+        }
+
+        // Clear the screen with a light color (white)
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);  // Set background color to white
+        SDL_RenderClear(renderer);  // Clear screen with white background
+
+        // Render both buttons
+        renderButton(renderer, button1);
+        renderButton(renderer, button2);
+
+        // Update the window
+        SDL_RenderPresent(renderer);
+    }
+
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-    return 0;;
+    return 0;
 }

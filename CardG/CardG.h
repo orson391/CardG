@@ -5,5 +5,10 @@
 #define SDL_MAIN_HANDLED
 #include <iostream>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_net.h>
+#include <string>
+#include <ctime>
+#include <thread>
 
 // TODO: Reference additional headers your program requires here.
