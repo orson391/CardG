@@ -8,6 +8,30 @@ struct Button {
     std::string label;
 };
 
+void sendM(TCPsocket clientSocket, const char* message)
+{
+    //const char* message = "Hello, Client!";
+    int result = SDLNet_TCP_Send(clientSocket, message, strlen(message) + 1); // Include null terminator
+    if (result < strlen(message) + 1) {
+        std::cerr << "Failed to send message to client: " << SDLNet_GetError() << std::endl;
+    }
+    else {
+        std::cout << "Message sent to client!" << std::endl;
+    }
+}
+void reciveM(TCPsocket clientSocket)
+{
+    char buffer[512]; // Allocate a buffer for the incoming message
+    int result = SDLNet_TCP_Recv(clientSocket, buffer, sizeof(buffer));
+    if (result > 0) {
+        std::cout << "Message from client: " << buffer << std::endl;
+    }
+    else {
+        std::cerr << "Failed to receive message: " << SDLNet_GetError() << std::endl;
+    }
+}
+
+
 // Function to render a button with text
 void renderButtonWithText(SDL_Renderer* renderer, const Button& button, TTF_Font* font) {
     SDL_SetRenderDrawColor(renderer, button.color.r, button.color.g, button.color.b, button.color.a);
@@ -59,8 +83,10 @@ void createServer() {
         TCPsocket client = SDLNet_TCP_Accept(server);
         if (client) {
             std::cout << "Client connected!\n";
-            const char* welcome = "Welcome to the server!\n";
-            SDLNet_TCP_Send(client, welcome, strlen(welcome) + 1);
+            //const char* welcome = "Welcome to the server!\n";
+            //SDLNet_TCP_Send(client, welcome, strlen(welcome) + 1);
+            sendM(client, "HI NIGGA");
+            reciveM(client);
             SDLNet_TCP_Close(client);
 
             running = false;  // Exit after one connection for simplicity
@@ -70,6 +96,42 @@ void createServer() {
     SDLNet_TCP_Close(server);
     SDLNet_Quit();
 }
+
+void joinClient()
+{
+    IPaddress ip;
+    if (SDLNet_ResolveHost(&ip, "192.168.1.4", 12345) == -1)
+    {
+        fprintf(stderr, "SDLNet_ResolveHost Error: %s\n", SDLNet_GetError());
+        SDLNet_Quit();
+        TTF_Quit();
+        SDL_Quit();
+        return;
+    }
+
+    TCPsocket client = NULL;
+    while (!client)
+    {
+        client = SDLNet_TCP_Open(&ip);
+        if (!client)
+        {
+            fprintf(stderr, "Retrying connection...\n");
+            SDL_Delay(1000);
+        }
+        else
+        {
+            printf("Connected to the server!\n");
+            const char* message = "Hello, Server!";
+            SDLNet_TCP_Send(client, message, strlen(message) + 1);
+
+            SDLNet_TCP_Close(client);
+            SDLNet_Quit();
+            TTF_Quit();
+            SDL_Quit();
+        }
+    }
+}
+
 
 bool isMouseOver(const SDL_Rect& rect, int mouseX, int mouseY) {
     return mouseX > rect.x && mouseX < rect.x + rect.w &&
@@ -113,7 +175,9 @@ int main(int argc, char* argv[]) {
     Button button1 = { {200, 200, 100, 30}, {0, 0, 0, 255}, "Start Server" };
 
     // Second button (red)
-    Button button2 = { {200, 300, 100, 30}, {255, 0, 0, 255}, "Exit" };
+    Button button2 = { {200, 250, 100, 30}, {255, 0, 0, 255}, "Exit" };
+
+    Button button3 = { {200, 300, 100, 30}, {0, 0, 0, 255}, "Join Client" };
 
     bool running = true;
     SDL_Event e;
@@ -143,6 +207,14 @@ int main(int argc, char* argv[]) {
                 else {
                     button2.color = { 255, 0, 0, 255 };  // Default color (red)
                 }
+
+                // Check for hover on button 3
+                if (isMouseOver(button3.rect, mouseX, mouseY)) {
+                    button3.color = { 0, 255, 0, 255 };  // Hover color (green)
+                }
+                else {
+                    button3.color = { 0, 0, 0, 255 };  // Default color (black)
+                }
             }
 
             if (e.type == SDL_MOUSEBUTTONDOWN) {
@@ -160,6 +232,11 @@ int main(int argc, char* argv[]) {
                     std::cout << "Button 2 clicked! Exiting...\n";
                     running = false;
                 }
+                if (isMouseOver(button3.rect, mouseX, mouseY)) {
+                    std::cout << "Button 3 clicked! Joining...\n";
+                    joinClient();
+                    //running = false;
+                }
             }
         }
 
@@ -170,6 +247,7 @@ int main(int argc, char* argv[]) {
         // Render both buttons
         renderButtonWithText(renderer, button1, font);
         renderButtonWithText(renderer, button2, font);
+        renderButtonWithText(renderer, button3, font);
 
         // Update the screen
         SDL_RenderPresent(renderer);
