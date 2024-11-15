@@ -8,17 +8,17 @@ struct Button {
     std::string label;
 };
 
-void sendM(TCPsocket clientSocket, const char* message)
-{
-    //const char* message = "Hello, Client!";
-    int result = SDLNet_TCP_Send(clientSocket, message, strlen(message) + 1); // Include null terminator
-    if (result < strlen(message) + 1) {
-        std::cerr << "Failed to send message to client: " << SDLNet_GetError() << std::endl;
-    }
-    else {
-        std::cout << "Message sent to client!" << std::endl;
+struct Player {
+    TCPsocket socket;
+    std::string name;
+};
+
+void broadcastMessage(const std::vector<Player>& players, const char* message) {
+    for (const auto& player : players) {
+        SDLNet_TCP_Send(player.socket, message, strlen(message) + 1);
     }
 }
+
 void reciveM(TCPsocket clientSocket)
 {
     char buffer[512]; // Allocate a buffer for the incoming message
@@ -58,38 +58,62 @@ void renderButtonWithText(SDL_Renderer* renderer, const Button& button, TTF_Font
 // Server function
 void createServer() {
     if (SDLNet_Init() == -1) {
-        fprintf(stderr, "SDLNet_Init Error: %s\n", SDLNet_GetError());
+        std::cerr << "SDLNet_Init Error: " << SDLNet_GetError() << std::endl;
         return;
     }
 
     IPaddress ip;
     if (SDLNet_ResolveHost(&ip, NULL, 12345) == -1) {
-        fprintf(stderr, "SDLNet_ResolveHost Error: %s\n", SDLNet_GetError());
+        std::cerr << "SDLNet_ResolveHost Error: " << SDLNet_GetError() << std::endl;
         SDLNet_Quit();
         return;
     }
 
     TCPsocket server = SDLNet_TCP_Open(&ip);
     if (!server) {
-        fprintf(stderr, "SDLNet_TCP_Open Error: %s\n", SDLNet_GetError());
+        std::cerr << "SDLNet_TCP_Open Error: " << SDLNet_GetError() << std::endl;
         SDLNet_Quit();
         return;
     }
 
-    std::cout << "Server running on port 12345\n";
-    bool running = true;
+    std::cout << "Room created. Waiting for players on port 12345...\n";
 
-    while (running) {
+    std::vector<Player> players;
+    int currentPlayerIndex = 0;
+
+    while (true) {
+        // Accept new connections
         TCPsocket client = SDLNet_TCP_Accept(server);
         if (client) {
-            std::cout << "Client connected!\n";
-            //const char* welcome = "Welcome to the server!\n";
-            //SDLNet_TCP_Send(client, welcome, strlen(welcome) + 1);
-            sendM(client, "HI NIGGA");
-            reciveM(client);
-            SDLNet_TCP_Close(client);
+            char welcomeMessage[] = "Welcome to the game!";
+            SDLNet_TCP_Send(client, welcomeMessage, strlen(welcomeMessage) + 1);
 
-            running = false;  // Exit after one connection for simplicity
+            // Add player to the list
+            players.push_back({ client, "Player " + std::to_string(players.size() + 1) });
+            std::cout << "Player joined. Total players: " << players.size() << "\n";
+
+            // Broadcast new player count
+            std::string playerCountMessage = "PLAYERS|" + std::to_string(players.size());
+            broadcastMessage(players, playerCountMessage.c_str());
+        }
+
+        // Process actions from players
+        for (size_t i = 0; i < players.size(); ++i) {
+            char buffer[512];
+            int bytesReceived = SDLNet_TCP_Recv(players[i].socket, buffer, sizeof(buffer));
+            if (bytesReceived > 0) {
+                buffer[bytesReceived] = '\0';
+                std::cout << players[i].name << " says: " << buffer << "\n";
+
+                if (strncmp(buffer, "MOVE", 4) == 0 && i == currentPlayerIndex) {
+                    // Handle turn and broadcast update
+                    std::string updateMessage = "UPDATE|" + players[i].name + "|" + buffer;
+                    broadcastMessage(players, updateMessage.c_str());
+
+                    // Move to the next player's turn
+                    currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
+                }
+            }
         }
     }
 
@@ -99,37 +123,54 @@ void createServer() {
 
 void joinClient()
 {
-    IPaddress ip;
-    if (SDLNet_ResolveHost(&ip, "192.168.1.4", 12345) == -1)
-    {
-        fprintf(stderr, "SDLNet_ResolveHost Error: %s\n", SDLNet_GetError());
-        SDLNet_Quit();
-        TTF_Quit();
-        SDL_Quit();
+    if (SDLNet_Init() == -1) {
+        std::cerr << "SDLNet_Init Error: " << SDLNet_GetError() << std::endl;
         return;
     }
 
-    TCPsocket client = NULL;
-    while (!client)
-    {
-        client = SDLNet_TCP_Open(&ip);
-        if (!client)
-        {
-            fprintf(stderr, "Retrying connection...\n");
-            SDL_Delay(1000);
-        }
-        else
-        {
-            printf("Connected to the server!\n");
-            const char* message = "Hello, Server!";
-            SDLNet_TCP_Send(client, message, strlen(message) + 1);
+    std::string serverIP = "127.0.0.1"; // Change this to the host's IP
+    int serverPort = 12345;
 
-            SDLNet_TCP_Close(client);
-            SDLNet_Quit();
-            TTF_Quit();
-            SDL_Quit();
+    IPaddress ip;
+    if (SDLNet_ResolveHost(&ip, serverIP.c_str(), serverPort) == -1) {
+        std::cerr << "SDLNet_ResolveHost Error: " << SDLNet_GetError() << std::endl;
+        SDLNet_Quit();
+        return;
+    }
+
+    TCPsocket client = SDLNet_TCP_Open(&ip);
+    if (!client) {
+        std::cerr << "SDLNet_TCP_Open Error: " << SDLNet_GetError() << std::endl;
+        SDLNet_Quit();
+        return;
+    }
+
+    char buffer[512];
+    bool running = true;
+
+    while (running) {
+        // Receive messages from the server
+        int bytesReceived = SDLNet_TCP_Recv(client, buffer, sizeof(buffer));
+        if (bytesReceived > 0) {
+            buffer[bytesReceived] = '\0';
+            std::cout << "Server says: " << buffer << std::endl;
+        }
+
+        // Send actions to the server
+        std::cout << "Enter your action (e.g., MOVE|1|2 or EXIT): ";
+        std::string action;
+        std::cin >> action;
+
+        if (action == "EXIT") {
+            running = false;
+        }
+        else {
+            SDLNet_TCP_Send(client, action.c_str(), action.length() + 1);
         }
     }
+
+    SDLNet_TCP_Close(client);
+    SDLNet_Quit();
 }
 
 
