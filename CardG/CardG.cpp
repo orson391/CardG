@@ -8,6 +8,62 @@ struct Button {
     std::string label;
 };
 
+struct Card {
+    enum class Suit { Hearts, Diamonds, Clubs, Spades }; // Enum for suits
+    enum class Rank { Two = 2, Three, Four, Five, Six, Seven, Eight, Nine, Ten, Jack, Queen, King, Ace }; // Enum for ranks
+
+    Suit suit;     // The suit of the card
+    Rank rank;     // The rank of the card
+    bool faceUp;   // True if the card is face-up, false if face-down
+
+    // Constructor for initializing the card
+    Card(Suit s, Rank r, bool f = false) : suit(s), rank(r), faceUp(f) {}
+
+    // Function to get a string representation of the card (for display or debugging)
+    std::string toString() const {
+        std::string rankStr;
+        switch (rank) {
+        case Rank::Two: rankStr = "2"; break;
+        case Rank::Three: rankStr = "3"; break;
+        case Rank::Four: rankStr = "4"; break;
+        case Rank::Five: rankStr = "5"; break;
+        case Rank::Six: rankStr = "6"; break;
+        case Rank::Seven: rankStr = "7"; break;
+        case Rank::Eight: rankStr = "8"; break;
+        case Rank::Nine: rankStr = "9"; break;
+        case Rank::Ten: rankStr = "10"; break;
+        case Rank::Jack: rankStr = "Jack"; break;
+        case Rank::Queen: rankStr = "Queen"; break;
+        case Rank::King: rankStr = "King"; break;
+        case Rank::Ace: rankStr = "Ace"; break;
+        }
+
+        std::string suitStr;
+        switch (suit) {
+        case Suit::Hearts: suitStr = "Hearts"; break;
+        case Suit::Diamonds: suitStr = "Diamonds"; break;
+        case Suit::Clubs: suitStr = "Clubs"; break;
+        case Suit::Spades: suitStr = "Spades"; break;
+        }
+
+        return rankStr + " of " + suitStr + (faceUp ? " (Face-up)" : " (Face-down)");
+    }
+};
+
+std::vector<Card> initializeDeck() {
+    std::vector<Card> deck;
+
+    // Loop over all suits and ranks to create all 52 cards
+    for (int suit = 0; suit < 4; ++suit) {
+        for (int rank = 2; rank <= 14; ++rank) {
+            deck.push_back(Card(static_cast<Card::Suit>(suit), static_cast<Card::Rank>(rank)));
+        }
+    }
+
+    return deck;
+}
+
+
 struct Player {
     TCPsocket socket;
     std::string name;
@@ -180,6 +236,15 @@ bool isMouseOver(const SDL_Rect& rect, int mouseX, int mouseY) {
 }
 
 int main(int argc, char* argv[]) {
+
+    std::vector<Card> deck = initializeDeck();
+    std::cout << "Cards initalized" << std::endl;
+
+    // Print all cards in the deck
+    for (const auto& card : deck) {
+        std::cout << card.toString() << std::endl;
+    }
+
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL Initialization failed: " << SDL_GetError() << std::endl;
         return -1;
