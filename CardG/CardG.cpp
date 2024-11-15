@@ -65,9 +65,73 @@ std::vector<Card> initializeDeck() {
 
 
 struct Player {
-    TCPsocket socket;
-    std::string name;
+    TCPsocket socket;                // Connection socket
+    std::string name;                // Player name
+    std::vector<Card> myCards;       // Cards in hand
+    int score = 0;                   // Player's score (optional, for scoring games)
+    bool isTurn = false;             // Whether it's the player's turn
+    bool isConnected = true;         // Track if the player is connected
 };
+
+
+std::vector<Card> randdom(std::vector<Card> myne)
+{
+    std::random_device rd;
+    std::mt19937 g(rd());
+    std::shuffle(myne.begin(), myne.end(), g);
+
+    //for (const auto& mcard : myne) {
+    //    std::cout << mcard.toString() << std::endl;
+    //}
+    return myne;
+}
+
+std::vector<std::vector<Card>> divideIntoCombos(const std::vector<Card>& cards, int comboSize) {
+    std::vector<std::vector<Card>> combos;
+    int totalNumbers = cards.size();
+
+    for (int i = 0; i < totalNumbers; i += comboSize) {
+        std::vector<Card> combo; // Corrected to store Card objects
+        for (int j = i; j < i + comboSize && j < totalNumbers; ++j) {
+            combo.push_back(cards[j]);
+        }
+        combos.push_back(combo);
+    }
+
+    return combos;
+}
+
+
+Card parseCard(const std::string& cardStr) {
+    Card::Suit suit;
+    Card::Rank rank;
+
+    // Extract suit
+    if (cardStr.find("Hearts") != std::string::npos) suit = Card::Suit::Hearts;
+    else if (cardStr.find("Diamonds") != std::string::npos) suit = Card::Suit::Diamonds;
+    else if (cardStr.find("Clubs") != std::string::npos) suit = Card::Suit::Clubs;
+    else if (cardStr.find("Spades") != std::string::npos) suit = Card::Suit::Spades;
+
+    // Extract rank
+    if (cardStr.find("2") != std::string::npos) rank = Card::Rank::Two;
+    else if (cardStr.find("3") != std::string::npos) rank = Card::Rank::Three;
+    else if (cardStr.find("4") != std::string::npos) rank = Card::Rank::Four;
+    else if (cardStr.find("5") != std::string::npos) rank = Card::Rank::Five;
+    else if (cardStr.find("6") != std::string::npos) rank = Card::Rank::Six;
+    else if (cardStr.find("7") != std::string::npos) rank = Card::Rank::Seven;
+    else if (cardStr.find("8") != std::string::npos) rank = Card::Rank::Eight;
+    else if (cardStr.find("9") != std::string::npos) rank = Card::Rank::Nine;
+    else if (cardStr.find("10") != std::string::npos) rank = Card::Rank::Ten;
+    else if (cardStr.find("Jack") != std::string::npos) rank = Card::Rank::Jack;
+    else if (cardStr.find("Queen") != std::string::npos) rank = Card::Rank::Queen;
+    else if (cardStr.find("King") != std::string::npos) rank = Card::Rank::King;
+    else if (cardStr.find("Ace") != std::string::npos) rank = Card::Rank::Ace;
+
+    return Card(suit, rank);
+}
+
+
+
 
 void broadcastMessage(const std::vector<Player>& players, const char* message) {
     for (const auto& player : players) {
@@ -100,7 +164,7 @@ void renderButtonWithText(SDL_Renderer* renderer, const Button& button, TTF_Font
 }
 
 // Server function
-void createServer() {
+void createServer(std::vector<Card> deck) {
     if (SDLNet_Init() == -1) {
         std::cerr << "SDLNet_Init Error: " << SDLNet_GetError() << std::endl;
         return;
@@ -119,6 +183,9 @@ void createServer() {
         SDLNet_Quit();
         return;
     }
+
+    std::cout << "Cards Shuffled" << std::endl;
+    std::vector<Card> RandCard = randdom(deck);
 
     std::cout << "Room created. Waiting for players on port 12345...\n";
 
@@ -185,32 +252,38 @@ void createServer() {
 
         // Once joining is closed, process player actions
         if (joiningClosed) {
+            int pl = players.size();
+            std::vector<std::vector<Card>> combos = divideIntoCombos(RandCard, pl);
+
             for (size_t i = 0; i < players.size(); ++i) {
-                char buffer[512];
-                int bytesReceived = SDLNet_TCP_Recv(players[i].socket, buffer, sizeof(buffer));
-                if (bytesReceived > 0) {
-                    buffer[bytesReceived] = '\0';
-                    std::cout << players[i].name << " says: " << buffer << "\n";
+                players[i].myCards = combos[i]; // Assign cards to each player
 
-                    if (strncmp(buffer, "MOVE", 4) == 0 && i == currentPlayerIndex) {
-                        // Handle turn and broadcast update
-                        std::string updateMessage = "UPDATE|" + players[i].name + "|" + buffer;
-                        broadcastMessage(players, updateMessage.c_str());
+                // Serialize the cards
+                std::string serializedCards;
+                for (const Card& card : players[i].myCards) {
+                    serializedCards += card.toString() + ";"; // Use ';' as a delimiter
+                }
 
-                        // Move to the next player's turn
-                        currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
-                    }
+                // Send the serialized cards to the player
+                int result = SDLNet_TCP_Send(players[i].socket, serializedCards.c_str(), serializedCards.size());
+                if (result < serializedCards.size()) {
+                    std::cerr << "Failed to send cards to player: " << players[i].name << "\n";
+                }
+                else {
+                    std::cout << "Sent cards to " << players[i].name << ": " << serializedCards << "\n";
                 }
             }
         }
+
+
     }
 
     SDLNet_TCP_Close(server);
     SDLNet_Quit();
 }
 
-void joinClient()
-{
+void joinClient() {
+    // Initialize SDL_net
     if (SDLNet_Init() == -1) {
         std::cerr << "SDLNet_Init Error: " << SDLNet_GetError() << std::endl;
         return;
@@ -219,6 +292,7 @@ void joinClient()
     std::string serverIP = "127.0.0.1"; // Change this to the host's IP
     int serverPort = 12345;
 
+    // Resolve the host (server IP and port)
     IPaddress ip;
     if (SDLNet_ResolveHost(&ip, serverIP.c_str(), serverPort) == -1) {
         std::cerr << "SDLNet_ResolveHost Error: " << SDLNet_GetError() << std::endl;
@@ -226,6 +300,7 @@ void joinClient()
         return;
     }
 
+    // Open the TCP connection
     TCPsocket client = SDLNet_TCP_Open(&ip);
     if (!client) {
         std::cerr << "SDLNet_TCP_Open Error: " << SDLNet_GetError() << std::endl;
@@ -233,32 +308,58 @@ void joinClient()
         return;
     }
 
-    char buffer[512];
+    std::cout << "Connected to server at " << serverIP << ":" << serverPort << std::endl;
+
+    char buffer[1024];
     bool running = true;
 
     while (running) {
-        // Receive messages from the server
-        int bytesReceived = SDLNet_TCP_Recv(client, buffer, sizeof(buffer));
+        // Receive data from the server
+        int bytesReceived = SDLNet_TCP_Recv(client, buffer, sizeof(buffer) - 1);
         if (bytesReceived > 0) {
-            buffer[bytesReceived] = '\0';
-            std::cout << "Server says: " << buffer << std::endl;
+            buffer[bytesReceived] = '\0'; // Null-terminate the received data
+            std::string receivedData(buffer);
+            std::vector<Card> receivedCards;
+
+            // Parse the cards
+            size_t pos = 0;
+            while ((pos = receivedData.find(';')) != std::string::npos) {
+                std::string cardStr = receivedData.substr(0, pos);
+                receivedData.erase(0, pos + 1);
+
+                // Convert the string back into a Card object
+                Card card = parseCard(cardStr);
+                receivedCards.push_back(card);
+            }
+
+            // Display the received cards
+            std::cout << "Received cards:\n";
+            for (const Card& card : receivedCards) {
+                std::cout << card.toString() << "\n";
+            }
         }
-
-        // Send actions to the server
-        std::cout << "Enter your action (e.g., MOVE|1|2 or EXIT): ";
-        std::string action;
-        std::cin >> action;
-
-        if (action == "EXIT") {
+        else if (bytesReceived == 0) {
+            // Server closed the connection
+            std::cerr << "Connection closed by server." << std::endl;
             running = false;
+            break;
         }
         else {
-            SDLNet_TCP_Send(client, action.c_str(), action.length() + 1);
+            // Handle errors
+            std::cerr << "SDLNet_TCP_Recv Error: " << SDLNet_GetError() << std::endl;
+            running = false;
+            break;
         }
+
+        // Send a simple acknowledgment to the server
+        std::string action = "ACK";
+        SDLNet_TCP_Send(client, action.c_str(), action.length() + 1);
     }
 
+    // Cleanup
     SDLNet_TCP_Close(client);
     SDLNet_Quit();
+    std::cout << "Disconnected from server." << std::endl;
 }
 
 
@@ -276,6 +377,7 @@ int main(int argc, char* argv[]) {
     for (const auto& card : deck) {
         std::cout << card.toString() << std::endl;
     }
+    
 
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL Initialization failed: " << SDL_GetError() << std::endl;
@@ -362,7 +464,7 @@ int main(int argc, char* argv[]) {
                 // Check for button 1 click
                 if (isMouseOver(button1.rect, mouseX, mouseY)) {
                     std::cout << "Button 1 clicked! Starting server...\n";
-                    createServer();
+                    createServer(deck);
                 }
 
                 // Check for button 2 click
