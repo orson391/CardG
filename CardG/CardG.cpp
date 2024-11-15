@@ -75,18 +75,6 @@ void broadcastMessage(const std::vector<Player>& players, const char* message) {
     }
 }
 
-void reciveM(TCPsocket clientSocket)
-{
-    char buffer[512]; // Allocate a buffer for the incoming message
-    int result = SDLNet_TCP_Recv(clientSocket, buffer, sizeof(buffer));
-    if (result > 0) {
-        std::cout << "Message from client: " << buffer << std::endl;
-    }
-    else {
-        std::cerr << "Failed to receive message: " << SDLNet_GetError() << std::endl;
-    }
-}
-
 
 // Function to render a button with text
 void renderButtonWithText(SDL_Renderer* renderer, const Button& button, TTF_Font* font) {
@@ -136,38 +124,82 @@ void createServer() {
 
     std::vector<Player> players;
     int currentPlayerIndex = 0;
+    const int MAX_PLAYERS = 6;
+    const int JOIN_TIME_LIMIT = 30;  // Time limit in seconds
+    bool joiningClosed = false;  // Flag to track if joining period has ended
+    auto startTime = std::chrono::steady_clock::now();
 
     while (true) {
-        // Accept new connections
-        TCPsocket client = SDLNet_TCP_Accept(server);
-        if (client) {
-            char welcomeMessage[] = "Welcome to the game!";
-            SDLNet_TCP_Send(client, welcomeMessage, strlen(welcomeMessage) + 1);
-
-            // Add player to the list
-            players.push_back({ client, "Player " + std::to_string(players.size() + 1) });
-            std::cout << "Player joined. Total players: " << players.size() << "\n";
-
-            // Broadcast new player count
-            std::string playerCountMessage = "PLAYERS|" + std::to_string(players.size());
-            broadcastMessage(players, playerCountMessage.c_str());
+        // Get the current time and calculate the elapsed time
+        auto currentTime = std::chrono::steady_clock::now();
+        std::chrono::duration<int> elapsedTime = std::chrono::duration_cast<std::chrono::seconds>(currentTime - startTime);
+        
+        // Check if the time limit has passed and close joining if it's over
+        int remainingTime = JOIN_TIME_LIMIT - elapsedTime.count();
+        if (!joiningClosed) {
+            if (remainingTime > 0) {
+                std::cout << "Time remaining to join: " << remainingTime << " seconds.\n";
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+            else if (!joiningClosed) {
+                std::cout << "Joining time has ended. No more players can join.\n";
+                joiningClosed = true;  // Mark that the join period has ended
+            }
         }
 
-        // Process actions from players
-        for (size_t i = 0; i < players.size(); ++i) {
-            char buffer[512];
-            int bytesReceived = SDLNet_TCP_Recv(players[i].socket, buffer, sizeof(buffer));
-            if (bytesReceived > 0) {
-                buffer[bytesReceived] = '\0';
-                std::cout << players[i].name << " says: " << buffer << "\n";
+        // Accept new connections while the joining period is open
+        if (!joiningClosed) {
+            TCPsocket client = SDLNet_TCP_Accept(server);
+            if (client) {
+                // Reject if joining time has ended
+                if (elapsedTime.count() > JOIN_TIME_LIMIT) {
+                    char rejectionMessage[] = "Sorry, the time to join has expired.";
+                    SDLNet_TCP_Send(client, rejectionMessage, strlen(rejectionMessage) + 1);
+                    SDLNet_TCP_Close(client);
+                    std::cout << "Rejected a player, time to join has expired.\n";
+                    continue;
+                }
 
-                if (strncmp(buffer, "MOVE", 4) == 0 && i == currentPlayerIndex) {
-                    // Handle turn and broadcast update
-                    std::string updateMessage = "UPDATE|" + players[i].name + "|" + buffer;
-                    broadcastMessage(players, updateMessage.c_str());
+                // Accept the player if there is space
+                if (players.size() < MAX_PLAYERS) {
+                    char welcomeMessage[] = "Welcome to the game!";
+                    SDLNet_TCP_Send(client, welcomeMessage, strlen(welcomeMessage) + 1);
 
-                    // Move to the next player's turn
-                    currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
+                    // Add player to the list
+                    players.push_back({ client, "Player " + std::to_string(players.size() + 1) });
+                    std::cout << "Player joined. Total players: " << players.size() << "\n";
+
+                    // Broadcast new player count
+                    std::string playerCountMessage = "PLAYERS|" + std::to_string(players.size());
+                    broadcastMessage(players, playerCountMessage.c_str());
+                }
+                else {
+                    // Reject the player if the room is full
+                    char rejectionMessage[] = "Sorry, the room is full. Please try again later.";
+                    SDLNet_TCP_Send(client, rejectionMessage, strlen(rejectionMessage) + 1);
+                    SDLNet_TCP_Close(client);
+                    std::cout << "Rejected a player, room is full.\n";
+                }
+            }
+        }
+
+        // Once joining is closed, process player actions
+        if (joiningClosed) {
+            for (size_t i = 0; i < players.size(); ++i) {
+                char buffer[512];
+                int bytesReceived = SDLNet_TCP_Recv(players[i].socket, buffer, sizeof(buffer));
+                if (bytesReceived > 0) {
+                    buffer[bytesReceived] = '\0';
+                    std::cout << players[i].name << " says: " << buffer << "\n";
+
+                    if (strncmp(buffer, "MOVE", 4) == 0 && i == currentPlayerIndex) {
+                        // Handle turn and broadcast update
+                        std::string updateMessage = "UPDATE|" + players[i].name + "|" + buffer;
+                        broadcastMessage(players, updateMessage.c_str());
+
+                        // Move to the next player's turn
+                        currentPlayerIndex = (currentPlayerIndex + 1) % players.size();
+                    }
                 }
             }
         }
