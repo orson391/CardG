@@ -3,7 +3,7 @@
 #
 
 # Add source to this project's executable.
-add_executable (CardG "CardG.cpp" "CardG.h")
+add_executable (CardG "CardG.cpp" "CardG.h" "Player.cpp" "PlayerG.h" "Server.cpp" "Client.cpp" "Main.cpp" "Client.h" "Server.h")
 
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET CardG PROPERTY CXX_STANDARD 20)
